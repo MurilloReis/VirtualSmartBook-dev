@@ -33,6 +33,10 @@
                 <button id="dark-mode-toggle-btn" title="Alternar Modo Noturno" class="toolbar-icon-btn text-gray-500 hover:text-blue-600">
                     <i class="fas fa-moon"></i>
                     <i class="fas fa-sun"></i> </button>
+                <button id="toggle-ai-panel-btn" title="Artefatos de IA" class="toolbar-icon-btn text-gray-500 hover:text-blue-600 relative">
+                    <i class="fas fa-robot"></i>
+                    <span id="total-artifacts-badge" class="hidden absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center text-[10px] font-bold">0</span>
+                </button>
                 <button id="rename-notebook-btn" title="Renomear Caderno" class="toolbar-icon-btn text-gray-500 hover:text-blue-600">
                     <i class="fas fa-edit"></i>
                 </button>
@@ -119,11 +123,6 @@
                 <button id="remove-format-btn" class="toolbar-btn" title="Limpar formatação"><i class="fas fa-eraser"></i></button>
             </div>
             <div class="flex items-center space-x-4 flex-shrink-0">
-                <button id="view-summaries-btn" title="Ver Resumos Salvos" class="toolbar-icon-btn text-gray-600 hover:text-blue-600 flex items-center space-x-2 bg-gray-100 px-3 py-1.5 rounded-md relative" disabled>
-                    <i class="fas fa-list-alt"></i>
-                    <span>Resumos</span>
-                    <span id="summaries-count-badge" class="absolute -top-2 -right-2 bg-blue-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center hidden">0</span>
-                </button>
                 <button id="export-md-btn" title="Exportar para Markdown (.md)" class="toolbar-icon-btn text-gray-600 hover:text-blue-600 flex items-center space-x-2 bg-gray-100 px-3 py-1.5 rounded-md">
                     <i class="fab fa-markdown"></i>
                     <span>Markdown</span>
@@ -175,11 +174,52 @@
             </button>
 
             <div id="editor-scroll-wrapper" class="flex-1 bg-white">
-                <div id="page-render-area" class="flex flex-col"> 
+                <div id="page-render-area" class="flex flex-col">
                     <h2 id="current-page-title" class="text-3xl font-bold mb-4 text-gray-900">Selecione uma Página</h2>
                     <div id="page-content" class="content-editable-area flex-grow bg-white" contenteditable="true"></div>
                 </div>
             </div>
+
+            <!-- PAINEL LATERAL DE ARTEFATOS IA -->
+            <div id="ai-panel" class="ai-panel hidden">
+                <div class="ai-panel-header">
+                    <h3 class="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                        <i class="fas fa-robot text-blue-600"></i>
+                        Artefatos de IA
+                    </h3>
+                    <button id="close-ai-panel-btn" class="text-gray-500 hover:text-gray-800 text-xl" title="Fechar painel">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+
+                <!-- ABAS -->
+                <div class="ai-panel-tabs">
+                    <button id="tab-summaries" class="ai-tab active" data-tab="summaries">
+                        <i class="fas fa-file-alt"></i>
+                        <span>Resumos</span>
+                        <span id="summaries-badge" class="ai-badge">0</span>
+                    </button>
+                    <button id="tab-mindmaps" class="ai-tab" data-tab="mindmaps">
+                        <i class="fas fa-sitemap"></i>
+                        <span>Mapas Mentais</span>
+                        <span id="mindmaps-badge" class="ai-badge">0</span>
+                    </button>
+                </div>
+
+                <!-- CONTEÚDO -->
+                <div class="ai-panel-content">
+                    <!-- RESUMOS -->
+                    <div id="ai-summaries-content" class="ai-tab-content active">
+                        <p class="text-gray-500 text-center py-8">Nenhum resumo gerado ainda.</p>
+                    </div>
+
+                    <!-- MAPAS MENTAIS -->
+                    <div id="ai-mindmaps-content" class="ai-tab-content hidden">
+                        <p class="text-gray-500 text-center py-8">Nenhum mapa mental gerado ainda.</p>
+                    </div>
+                </div>
+            </div>
+
             </main>
     </div>
 

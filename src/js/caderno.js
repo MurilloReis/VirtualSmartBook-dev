@@ -40,7 +40,6 @@ const modalConfirmBtn = document.getElementById('modal-confirm-btn');
 const modalButtons = document.getElementById('modal-buttons');
 const modalSpinner = document.getElementById('modal-spinner');
 let modalConfirmCallback = null;
-const viewSummariesBtn = document.getElementById('view-summaries-btn');
 const summariesCountBadge = document.getElementById('summaries-count-badge');
 const summariesModal = document.getElementById('summaries-modal');
 const summariesModalCloseBtn = document.getElementById('summaries-modal-close-btn');
@@ -49,6 +48,18 @@ const mindMapModal = document.getElementById('mind-map-modal');
 const mindMapModalCloseBtn = document.getElementById('mind-map-modal-close-btn');
 const mindMapContainer = document.getElementById('mind-map-container');
 const saveStatusEl = document.getElementById('save-status');
+
+// --- Elementos do Painel de Artefatos IA ---
+const aiPanel = document.getElementById('ai-panel');
+const toggleAiPanelBtn = document.getElementById('toggle-ai-panel-btn');
+const closeAiPanelBtn = document.getElementById('close-ai-panel-btn');
+const tabSummaries = document.getElementById('tab-summaries');
+const tabMindmaps = document.getElementById('tab-mindmaps');
+const aiSummariesContent = document.getElementById('ai-summaries-content');
+const aiMindmapsContent = document.getElementById('ai-mindmaps-content');
+const summariesBadge = document.getElementById('summaries-badge');
+const mindmapsBadge = document.getElementById('mindmaps-badge');
+const totalArtifactsBadge = document.getElementById('total-artifacts-badge');
 const boldBtn = document.getElementById('bold-btn');
 const italicBtn = document.getElementById('italic-btn');
 const underlineBtn = document.getElementById('underline-btn');
@@ -386,14 +397,8 @@ function renderPageContent() {
         pageContent.contentEditable = 'false';
     }
 
-    if (page && page.summaries && page.summaries.length > 0) {
-        viewSummariesBtn.disabled = false;
-        summariesCountBadge.textContent = page.summaries.length;
-        summariesCountBadge.classList.remove('hidden');
-    } else {
-        viewSummariesBtn.disabled = true;
-        summariesCountBadge.classList.add('hidden');
-    }
+    // Atualizar painel de artefatos IA
+    updateAiBadges();
 }
 
 function toggleManagementButtons() {
@@ -532,6 +537,208 @@ function markdownListToHtml(markdown) {
 }
 
 
+// =================================================================================
+// FUNÇÕES DO PAINEL DE ARTEFATOS IA
+// =================================================================================
+
+/**
+ * Abre o painel de artefatos IA
+ */
+function openAiPanel() {
+    if (aiPanel) {
+        aiPanel.classList.remove('hidden');
+        updateAiPanelContent(); // Atualiza o conteúdo ao abrir
+    }
+}
+
+/**
+ * Fecha o painel de artefatos IA
+ */
+function closeAiPanel() {
+    if (aiPanel) {
+        aiPanel.classList.add('hidden');
+    }
+}
+
+/**
+ * Alterna (abre/fecha) o painel de artefatos IA
+ */
+function toggleAiPanel() {
+    if (aiPanel.classList.contains('hidden')) {
+        openAiPanel();
+    } else {
+        closeAiPanel();
+    }
+}
+
+/**
+ * Troca entre as abas do painel (Resumos / Mapas Mentais)
+ * @param {string} tabName - Nome da aba ('summaries' ou 'mindmaps')
+ */
+function switchAiTab(tabName) {
+    // Remove 'active' de todas as abas
+    const allTabs = document.querySelectorAll('.ai-tab');
+    const allTabContents = document.querySelectorAll('.ai-tab-content');
+
+    allTabs.forEach(tab => tab.classList.remove('active'));
+    allTabContents.forEach(content => content.classList.remove('active'));
+
+    // Adiciona 'active' na aba e conteúdo selecionados
+    if (tabName === 'summaries') {
+        tabSummaries.classList.add('active');
+        aiSummariesContent.classList.add('active');
+    } else if (tabName === 'mindmaps') {
+        tabMindmaps.classList.add('active');
+        aiMindmapsContent.classList.add('active');
+    }
+}
+
+/**
+ * Atualiza os badges (contadores) do painel
+ */
+function updateAiBadges() {
+    if (!activePageId) {
+        // Sem página ativa, zerar badges
+        summariesBadge.textContent = '0';
+        mindmapsBadge.textContent = '0';
+        totalArtifactsBadge.textContent = '0';
+        totalArtifactsBadge.classList.add('hidden');
+        return;
+    }
+
+    const page = userData.notebooks?.[activeNotebookId]?.sections?.[activeSectionId]?.pages?.[activePageId];
+
+    if (!page) {
+        summariesBadge.textContent = '0';
+        mindmapsBadge.textContent = '0';
+        totalArtifactsBadge.textContent = '0';
+        totalArtifactsBadge.classList.add('hidden');
+        return;
+    }
+
+    const summariesCount = (page.summaries && page.summaries.length) || 0;
+    const mindmapsCount = (page.mindMaps && page.mindMaps.length) || 0;
+    const totalCount = summariesCount + mindmapsCount;
+
+    // Atualizar badges
+    summariesBadge.textContent = summariesCount;
+    mindmapsBadge.textContent = mindmapsCount;
+    totalArtifactsBadge.textContent = totalCount;
+
+    // Mostrar/esconder badge do botão flutuante
+    if (totalCount > 0) {
+        totalArtifactsBadge.classList.remove('hidden');
+    } else {
+        totalArtifactsBadge.classList.add('hidden');
+    }
+}
+
+/**
+ * Atualiza o conteúdo do painel com os artefatos da página atual
+ */
+function updateAiPanelContent() {
+    updateAiBadges();
+
+    if (!activePageId) {
+        aiSummariesContent.innerHTML = '<p class="text-gray-500 text-center py-8">Selecione uma página primeiro.</p>';
+        aiMindmapsContent.innerHTML = '<p class="text-gray-500 text-center py-8">Selecione uma página primeiro.</p>';
+        return;
+    }
+
+    const page = userData.notebooks?.[activeNotebookId]?.sections?.[activeSectionId]?.pages?.[activePageId];
+
+    if (!page) return;
+
+    // === RESUMOS ===
+    if (!page.summaries || page.summaries.length === 0) {
+        aiSummariesContent.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhum resumo gerado ainda.</p>';
+    } else {
+        const sortedSummaries = [...page.summaries].sort((a, b) => b.createdAt - a.createdAt);
+        let htmlSummaries = '';
+
+        sortedSummaries.forEach((summary, index) => {
+            const formattedDate = new Date(summary.createdAt).toLocaleString('pt-BR', {
+                dateStyle: 'short',
+                timeStyle: 'short'
+            });
+            const cardId = `summary-${summary.createdAt}`;
+
+            htmlSummaries += `
+                <div class="artifact-card collapsed mb-3" data-card-id="${cardId}">
+                    <div class="artifact-header" onclick="toggleArtifactCard('${cardId}')">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-file-alt text-blue-600"></i>
+                            <span class="font-semibold text-gray-800">Resumo #${sortedSummaries.length - index}</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-gray-500">${formattedDate}</span>
+                            <i class="fas fa-chevron-down artifact-toggle-icon text-gray-400"></i>
+                        </div>
+                    </div>
+                    <div class="artifact-content">
+                        <p class="text-gray-800 text-sm whitespace-pre-wrap">${summary.summaryText}</p>
+                    </div>
+                </div>
+            `;
+        });
+
+        aiSummariesContent.innerHTML = htmlSummaries;
+    }
+
+    // === MAPAS MENTAIS ===
+    if (!page.mindMaps || page.mindMaps.length === 0) {
+        aiMindmapsContent.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhum mapa mental gerado ainda.</p>';
+    } else {
+        const sortedMindMaps = [...page.mindMaps].sort((a, b) => b.createdAt - a.createdAt);
+        let htmlMindMaps = '';
+
+        sortedMindMaps.forEach((mindMap, index) => {
+            const formattedDate = new Date(mindMap.createdAt).toLocaleString('pt-BR', {
+                dateStyle: 'short',
+                timeStyle: 'short'
+            });
+            const cardId = `mindmap-${mindMap.createdAt}`;
+
+            htmlMindMaps += `
+                <div class="artifact-card collapsed mb-3" data-card-id="${cardId}">
+                    <div class="artifact-header" onclick="toggleArtifactCard('${cardId}')">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-sitemap text-purple-600"></i>
+                            <span class="font-semibold text-gray-800">Mapa Mental #${sortedMindMaps.length - index}</span>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs text-gray-500">${formattedDate}</span>
+                            <i class="fas fa-chevron-down artifact-toggle-icon text-gray-400"></i>
+                        </div>
+                    </div>
+                    <div class="artifact-content">
+                        <div class="text-sm text-gray-800 bg-white p-3 rounded border border-purple-200">
+                            ${markdownListToHtml(mindMap.mapData)}
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+
+        aiMindmapsContent.innerHTML = htmlMindMaps;
+    }
+}
+
+/**
+ * Alterna o estado expandido/colapsado de um card de artefato
+ * @param {string} cardId - ID único do card
+ */
+function toggleArtifactCard(cardId) {
+    const card = document.querySelector(`[data-card-id="${cardId}"]`);
+    if (!card) return;
+
+    // Alterna a classe 'collapsed'
+    card.classList.toggle('collapsed');
+}
+
+// Tornar a função global para ser acessível via onclick no HTML
+window.toggleArtifactCard = toggleArtifactCard;
+
 
 // =================================================================================
 // EVENT LISTENERS ORIGINAIS (PERMANECEM AQUI)
@@ -546,12 +753,6 @@ if (darkModeToggleBtn) {
 }
 // FIM DA ADIÇÃO
 
-if (viewSummariesBtn) {
-    viewSummariesBtn.addEventListener('click', () => {
-        renderSummariesList();
-        summariesModal.classList.remove('hidden');
-    });
-}
 if (summariesModalCloseBtn) {
     summariesModalCloseBtn.addEventListener('click', () => {
         summariesModal.classList.add('hidden');
@@ -577,6 +778,7 @@ if (mindMapBtn) {
                             mapData: mindMapData
                         });
                         await saveChanges();
+                        updateAiBadges(); // Atualizar badges após salvar
                     }
 
                     hideModal();
@@ -597,6 +799,40 @@ if (mindMapModalCloseBtn) {
         mindMapModal.classList.add('hidden');
     });
 }
+
+// =================================================================================
+// EVENT LISTENERS DO PAINEL DE ARTEFATOS IA
+// =================================================================================
+
+// Botão flutuante para abrir o painel
+if (toggleAiPanelBtn) {
+    toggleAiPanelBtn.addEventListener('click', () => {
+        toggleAiPanel();
+    });
+}
+
+// Botão X para fechar o painel
+if (closeAiPanelBtn) {
+    closeAiPanelBtn.addEventListener('click', () => {
+        closeAiPanel();
+    });
+}
+
+// Aba de Resumos
+if (tabSummaries) {
+    tabSummaries.addEventListener('click', () => {
+        switchAiTab('summaries');
+    });
+}
+
+// Aba de Mapas Mentais
+if (tabMindmaps) {
+    tabMindmaps.addEventListener('click', () => {
+        switchAiTab('mindmaps');
+    });
+}
+
+// =================================================================================
 
 addSectionBtn.addEventListener('click', () => {
     showModal('Criar Nova Sessão', 'Qual será o nome da nova sessão?', {
@@ -917,6 +1153,7 @@ summarizeBtn.addEventListener('click', () => {
                     });
                     await saveChanges();
                     renderPageContent();
+                    updateAiBadges(); // Atualizar badges após salvar
                 }
                 hideModal();
                 showModal('Resumo Gerado pela IA', summary, { 
