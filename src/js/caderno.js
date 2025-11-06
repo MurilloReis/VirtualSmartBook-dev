@@ -40,7 +40,6 @@ const modalConfirmBtn = document.getElementById('modal-confirm-btn');
 const modalButtons = document.getElementById('modal-buttons');
 const modalSpinner = document.getElementById('modal-spinner');
 let modalConfirmCallback = null;
-const viewSummariesBtn = document.getElementById('view-summaries-btn');
 const summariesCountBadge = document.getElementById('summaries-count-badge');
 const summariesModal = document.getElementById('summaries-modal');
 const summariesModalCloseBtn = document.getElementById('summaries-modal-close-btn');
@@ -49,6 +48,18 @@ const mindMapModal = document.getElementById('mind-map-modal');
 const mindMapModalCloseBtn = document.getElementById('mind-map-modal-close-btn');
 const mindMapContainer = document.getElementById('mind-map-container');
 const saveStatusEl = document.getElementById('save-status');
+
+// --- Elementos do Painel de Artefatos IA ---
+const aiPanel = document.getElementById('ai-panel');
+const toggleAiPanelBtn = document.getElementById('toggle-ai-panel-btn');
+const closeAiPanelBtn = document.getElementById('close-ai-panel-btn');
+const tabSummaries = document.getElementById('tab-summaries');
+const tabMindmaps = document.getElementById('tab-mindmaps');
+const aiSummariesContent = document.getElementById('ai-summaries-content');
+const aiMindmapsContent = document.getElementById('ai-mindmaps-content');
+const summariesBadge = document.getElementById('summaries-badge');
+const mindmapsBadge = document.getElementById('mindmaps-badge');
+const totalArtifactsBadge = document.getElementById('total-artifacts-badge');
 const boldBtn = document.getElementById('bold-btn');
 const italicBtn = document.getElementById('italic-btn');
 const underlineBtn = document.getElementById('underline-btn');
@@ -327,6 +338,7 @@ function render() {
     renderPagesList(pages);
     renderPageContent();
     toggleManagementButtons();
+    updateAiPanelContent(); // Atualizar painel de artefatos ao mudar de página/seção
 }
 
 function renderNotebookName(name) { activeNotebookNameEl.textContent = name; }
@@ -386,14 +398,8 @@ function renderPageContent() {
         pageContent.contentEditable = 'false';
     }
 
-    if (page && page.summaries && page.summaries.length > 0) {
-        viewSummariesBtn.disabled = false;
-        summariesCountBadge.textContent = page.summaries.length;
-        summariesCountBadge.classList.remove('hidden');
-    } else {
-        viewSummariesBtn.disabled = true;
-        summariesCountBadge.classList.add('hidden');
-    }
+    // Atualizar painel de artefatos IA
+    updateAiBadges();
 }
 
 function toggleManagementButtons() {
@@ -505,32 +511,491 @@ function renderSummariesList() {
     });
 }
 
-function markdownListToHtml(markdown) {
-    const lines = markdown.split('\n').filter(line => line.trim() !== '');
-    let html = '<ul>';
-    let level = 0;
+// Conversor JSON para Markdown (FALLBACK no frontend)
+function jsonToMarkdownFallback(data, level = 1) {
+    let result = '';
+    const hash = '#'.repeat(Math.min(level, 6));
 
-    lines.forEach(line => {
-        const trimmedLine = line.trim();
-        const currentLevel = (line.match(/^\s*/)[0].length) / 2;
-        const content = trimmedLine.replace(/^- \s*/, '');
+    if (typeof data === 'string' && data.trim()) {
+        return `${hash} ${data.trim()}\n`;
+    }
 
-        if (currentLevel > level) {
-            html += '<ul>'.repeat(currentLevel - level);
-        } else if (currentLevel < level) {
-            html += '</li></ul>'.repeat(level - currentLevel) + '</li>';
-        } else if (level > 0 && !html.endsWith('</li>')) {
-             html += '</li>';
-        }
+    if (Array.isArray(data)) {
+        data.forEach(item => result += jsonToMarkdownFallback(item, level));
+        return result;
+    }
 
-        html += `<li>${content}`;
-        level = currentLevel;
-    });
+    if (typeof data === 'object' && data !== null) {
+        const title = data.central || data.title || data.name || data.topic;
+        if (title) result += `${hash} ${String(title).trim()}\n`;
 
-    html += '</li></ul>'.repeat(level + 1);
-    return html.replace(/<\/li><\/ul><\/li>/g, '</li></ul>');
+        const arrays = [data.branches, data.children, data.items, data.topics].filter(arr => Array.isArray(arr));
+        arrays.forEach(arr => arr.forEach(item => result += jsonToMarkdownFallback(item, level + 1)));
+    }
+
+    return result;
 }
 
+/**
+ * Renderiza um mapa mental interativo usando Markmap
+ * @param {string} markdown - Markdown formatado com cabeçalhos (#, ##, ###)
+ * @param {HTMLElement} container - Elemento onde o mapa será renderizado
+ */
+function renderMarkmap(markdown, container) {
+    if (!markdown || !container) {
+        console.error('Markdown ou container inválido para renderizar Markmap');
+        return;
+    }
+
+    try {
+        let markdownString = markdown;
+
+        // Se recebeu objeto JSON, converte para markdown
+        if (typeof markdown === 'object') {
+            console.warn('⚠️ Recebeu JSON em vez de markdown, convertendo...');
+            markdownString = jsonToMarkdownFallback(markdown);
+            console.log('✅ Markdown convertido no frontend:', markdownString);
+        }
+
+        markdownString = String(markdownString);
+
+        console.log('Renderizando Markmap com:', markdownString);
+
+        // Limpa o container
+        container.innerHTML = '';
+
+        // Garante que o container tenha dimensões
+        const containerRect = container.getBoundingClientRect();
+        const width = containerRect.width || 800;
+        const height = containerRect.height || 400;
+
+        console.log('Dimensões do container:', { width, height });
+
+        // Cria um SVG para o Markmap com dimensões explícitas
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', width);
+        svg.setAttribute('height', height);
+        svg.style.width = width + 'px';
+        svg.style.height = height + 'px';
+        container.appendChild(svg);
+
+        // Aguarda um frame para garantir que o SVG foi inserido no DOM
+        requestAnimationFrame(() => {
+            try {
+                // Usa a biblioteca Markmap global
+                const { Markmap } = window.markmap;
+                const { Transformer } = window.markmap;
+
+                // Transforma o markdown em dados para o Markmap
+                const transformer = new Transformer();
+                const { root } = transformer.transform(markdownString);
+
+                console.log('Root do mapa mental:', root);
+
+                // Renderiza o mapa mental
+                Markmap.create(svg, null, root);
+
+                console.log('Markmap renderizado com sucesso!');
+            } catch (innerError) {
+                console.error('Erro ao criar Markmap:', innerError);
+                container.innerHTML = `<div class="text-red-600 p-4">
+                    <p class="font-semibold mb-2">Erro ao renderizar mapa mental</p>
+                    <p class="text-sm">Detalhes: ${innerError.message}</p>
+                </div>`;
+            }
+        });
+    } catch (error) {
+        console.error('Erro ao renderizar Markmap:', error);
+        container.innerHTML = `<div class="text-red-600 p-4">
+            <p class="font-semibold mb-2">Erro ao renderizar mapa mental</p>
+            <p class="text-sm">Por favor, tente gerar novamente.</p>
+        </div>`;
+    }
+}
+
+
+// =================================================================================
+// FUNÇÕES DO PAINEL DE ARTEFATOS IA
+// =================================================================================
+
+/**
+ * Abre o painel de artefatos IA
+ */
+function openAiPanel() {
+    if (aiPanel) {
+        aiPanel.classList.remove('hidden');
+        updateAiPanelContent(); // Atualiza o conteúdo ao abrir
+    }
+}
+
+/**
+ * Fecha o painel de artefatos IA
+ */
+function closeAiPanel() {
+    if (aiPanel) {
+        aiPanel.classList.add('hidden');
+    }
+}
+
+/**
+ * Alterna (abre/fecha) o painel de artefatos IA
+ */
+function toggleAiPanel() {
+    if (aiPanel.classList.contains('hidden')) {
+        openAiPanel();
+    } else {
+        closeAiPanel();
+    }
+}
+
+/**
+ * Troca entre as abas do painel (Resumos / Mapas Mentais)
+ * @param {string} tabName - Nome da aba ('summaries' ou 'mindmaps')
+ */
+function switchAiTab(tabName) {
+    // Remove 'active' de todas as abas
+    const allTabs = document.querySelectorAll('.ai-tab');
+    const allTabContents = document.querySelectorAll('.ai-tab-content');
+
+    allTabs.forEach(tab => tab.classList.remove('active'));
+    allTabContents.forEach(content => content.classList.remove('active'));
+
+    // Adiciona 'active' na aba e conteúdo selecionados
+    if (tabName === 'summaries') {
+        tabSummaries.classList.add('active');
+        aiSummariesContent.classList.add('active');
+    } else if (tabName === 'mindmaps') {
+        tabMindmaps.classList.add('active');
+        aiMindmapsContent.classList.add('active');
+    }
+}
+
+/**
+ * Atualiza os badges (contadores) do painel
+ */
+function updateAiBadges() {
+    if (!activePageId) {
+        // Sem página ativa, zerar badges
+        summariesBadge.textContent = '0';
+        mindmapsBadge.textContent = '0';
+        totalArtifactsBadge.textContent = '0';
+        totalArtifactsBadge.classList.add('hidden');
+        return;
+    }
+
+    const page = userData.notebooks?.[activeNotebookId]?.sections?.[activeSectionId]?.pages?.[activePageId];
+
+    if (!page) {
+        summariesBadge.textContent = '0';
+        mindmapsBadge.textContent = '0';
+        totalArtifactsBadge.textContent = '0';
+        totalArtifactsBadge.classList.add('hidden');
+        return;
+    }
+
+    const summariesCount = (page.summaries && page.summaries.length) || 0;
+    const mindmapsCount = (page.mindMaps && page.mindMaps.length) || 0;
+    const totalCount = summariesCount + mindmapsCount;
+
+    // Atualizar badges
+    summariesBadge.textContent = summariesCount;
+    mindmapsBadge.textContent = mindmapsCount;
+    totalArtifactsBadge.textContent = totalCount;
+
+    // Mostrar/esconder badge do botão flutuante
+    if (totalCount > 0) {
+        totalArtifactsBadge.classList.remove('hidden');
+    } else {
+        totalArtifactsBadge.classList.add('hidden');
+    }
+}
+
+/**
+ * Atualiza o conteúdo do painel com os artefatos da página atual
+ */
+function updateAiPanelContent() {
+    updateAiBadges();
+
+    if (!activePageId) {
+        aiSummariesContent.innerHTML = '<p class="text-gray-500 text-center py-8">Selecione uma página primeiro.</p>';
+        aiMindmapsContent.innerHTML = '<p class="text-gray-500 text-center py-8">Selecione uma página primeiro.</p>';
+        return;
+    }
+
+    const page = userData.notebooks?.[activeNotebookId]?.sections?.[activeSectionId]?.pages?.[activePageId];
+
+    if (!page) return;
+
+    // === RESUMOS ===
+    if (!page.summaries || page.summaries.length === 0) {
+        aiSummariesContent.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhum resumo gerado ainda.</p>';
+    } else {
+        const sortedSummaries = [...page.summaries].sort((a, b) => b.createdAt - a.createdAt);
+        let htmlSummaries = '';
+
+        sortedSummaries.forEach((summary, index) => {
+            const formattedDate = new Date(summary.createdAt).toLocaleString('pt-BR', {
+                dateStyle: 'short',
+                timeStyle: 'short'
+            });
+            const cardId = `summary-${summary.createdAt}`;
+
+            htmlSummaries += `
+                <div class="artifact-card collapsed mb-3" data-card-id="${cardId}">
+                    <div class="artifact-header" onclick="toggleArtifactCard('${cardId}')">
+                        <div class="flex items-center gap-2">
+                            <i class="fas fa-file-alt text-blue-600"></i>
+                            <span class="font-semibold text-gray-800">Resumo #${sortedSummaries.length - index}</span>
+                        </div>
+                        <div class="artifact-actions">
+                            <button class="artifact-action-btn delete" onclick="event.stopPropagation(); deleteSummary(${summary.createdAt})" title="Excluir resumo">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                            <span class="text-xs text-gray-500">${formattedDate}</span>
+                            <i class="fas fa-chevron-down artifact-toggle-icon text-gray-400"></i>
+                        </div>
+                    </div>
+                    <div class="artifact-content">
+                        <p class="text-gray-800 text-sm whitespace-pre-wrap">${summary.summaryText}</p>
+                    </div>
+                </div>
+            `;
+        });
+
+        aiSummariesContent.innerHTML = htmlSummaries;
+    }
+
+    // === MAPAS MENTAIS ===
+    if (!page.mindMaps || page.mindMaps.length === 0) {
+        aiMindmapsContent.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhum mapa mental gerado ainda.</p>';
+    } else {
+        const sortedMindMaps = [...page.mindMaps].sort((a, b) => b.createdAt - a.createdAt);
+
+        // Limpa o conteúdo
+        aiMindmapsContent.innerHTML = '';
+
+        sortedMindMaps.forEach((mindMap, index) => {
+            const formattedDate = new Date(mindMap.createdAt).toLocaleString('pt-BR', {
+                dateStyle: 'short',
+                timeStyle: 'short'
+            });
+            const cardId = `mindmap-${mindMap.createdAt}`;
+
+            // Cria o card simples (sem expansão)
+            const card = document.createElement('div');
+            card.className = 'artifact-card-simple mb-3';
+            card.dataset.cardId = cardId;
+
+            // Armazena os dados do mapa mental no card para acesso posterior
+            // Se mapData for objeto, converte para JSON string; se já for string, mantém
+            card.dataset.mapData = typeof mindMap.mapData === 'object'
+                ? JSON.stringify(mindMap.mapData)
+                : mindMap.mapData;
+
+            card.innerHTML = `
+                <div class="flex items-center justify-between p-3">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-sitemap text-purple-600 text-lg"></i>
+                        <div>
+                            <div class="font-semibold text-gray-800">Mapa Mental #${sortedMindMaps.length - index}</div>
+                            <div class="text-xs text-gray-500">${formattedDate}</div>
+                        </div>
+                    </div>
+                    <div class="artifact-actions">
+                        <button class="artifact-action-btn expand" onclick="expandMindMapByCardId('${cardId}')" title="Visualizar em tela cheia">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                        <button class="artifact-action-btn delete" onclick="deleteMindMap(${mindMap.createdAt})" title="Excluir mapa mental">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            aiMindmapsContent.appendChild(card);
+        });
+    }
+}
+
+/**
+ * Alterna o estado expandido/colapsado de um card de artefato
+ * @param {string} cardId - ID único do card
+ */
+function toggleArtifactCard(cardId) {
+    const card = document.querySelector(`[data-card-id="${cardId}"]`);
+    if (!card) return;
+
+    // Alterna a classe 'collapsed'
+    card.classList.toggle('collapsed');
+}
+
+// Tornar a função global para ser acessível via onclick no HTML
+window.toggleArtifactCard = toggleArtifactCard;
+
+/**
+ * Exclui um resumo da página atual
+ * @param {number} createdAt - Timestamp do resumo a ser excluído
+ */
+function deleteSummary(createdAt) {
+    if (!activePageId) return;
+
+    showModal(
+        'Confirmar Exclusão',
+        'Tem certeza que deseja excluir este resumo?',
+        {
+            showCancelButton: true,
+            confirmText: 'Excluir',
+            confirmCallback: async () => {
+                try {
+                    const page = userData.notebooks[activeNotebookId].sections[activeSectionId].pages[activePageId];
+
+                    // Remove o resumo do array
+                    page.summaries = page.summaries.filter(s => s.createdAt !== createdAt);
+
+                    await saveChanges();
+                    updateAiPanelContent();
+                    updateAiBadges();
+
+                    console.log('✅ Resumo excluído com sucesso');
+                    hideModal();
+                } catch (error) {
+                    console.error('❌ Erro ao excluir resumo:', error);
+                    showModal('Erro', 'Não foi possível excluir o resumo.', { showCancelButton: false, confirmText: 'Fechar' });
+                }
+            }
+        }
+    );
+}
+
+/**
+ * Exclui um mapa mental da página atual
+ * @param {number} createdAt - Timestamp do mapa mental a ser excluído
+ */
+function deleteMindMap(createdAt) {
+    if (!activePageId) return;
+
+    showModal(
+        'Confirmar Exclusão',
+        'Tem certeza que deseja excluir este mapa mental?',
+        {
+            showCancelButton: true,
+            confirmText: 'Excluir',
+            confirmCallback: async () => {
+                try {
+                    const page = userData.notebooks[activeNotebookId].sections[activeSectionId].pages[activePageId];
+
+                    // Remove o mapa mental do array
+                    page.mindMaps = page.mindMaps.filter(m => m.createdAt !== createdAt);
+
+                    await saveChanges();
+                    updateAiPanelContent();
+                    updateAiBadges();
+
+                    console.log('✅ Mapa mental excluído com sucesso');
+                    hideModal();
+                } catch (error) {
+                    console.error('❌ Erro ao excluir mapa mental:', error);
+                    showModal('Erro', 'Não foi possível excluir o mapa mental.', { showCancelButton: false, confirmText: 'Fechar' });
+                }
+            }
+        }
+    );
+}
+
+/**
+ * Expande um mapa mental em tela cheia
+ * @param {string} markdownData - Dados markdown do mapa mental
+ */
+function expandMindMap(markdownData) {
+    const modal = document.getElementById('mindmap-expanded-modal');
+    const container = document.getElementById('mindmap-expanded-content-inner');
+
+    if (!modal || !container) {
+        console.error('❌ Elementos do modal de expansão não encontrados');
+        return;
+    }
+
+    // Limpa o container
+    container.innerHTML = '';
+
+    // Exibe o modal
+    modal.classList.remove('hidden');
+
+    // Aguarda um pouco para garantir que o modal foi renderizado
+    setTimeout(() => {
+        renderMarkmap(markdownData, container);
+    }, 100);
+}
+
+/**
+ * Fecha o modal de expansão de mapa mental
+ */
+function closeMindmapExpanded() {
+    const modal = document.getElementById('mindmap-expanded-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+
+        // Limpa o container após fechar
+        const container = document.getElementById('mindmap-expanded-content-inner');
+        if (container) {
+            container.innerHTML = '';
+        }
+    }
+}
+
+/**
+ * Expande um mapa mental a partir do ID do card
+ * @param {string} cardId - ID do card que contém o mapa mental
+ */
+function expandMindMapByCardId(cardId) {
+    const card = document.querySelector(`[data-card-id="${cardId}"]`);
+    if (!card) {
+        console.error('❌ Card não encontrado:', cardId);
+        return;
+    }
+
+    let mapData = card.dataset.mapData;
+    if (!mapData) {
+        console.error('❌ Dados do mapa mental não encontrados no card');
+        return;
+    }
+
+    // Se mapData for uma string JSON, faz o parse
+    try {
+        const parsed = JSON.parse(mapData);
+        // Se conseguiu fazer parse, é JSON - converte para markdown
+        mapData = jsonToMarkdownFallback(parsed);
+    } catch (e) {
+        // Se não conseguiu, já é uma string markdown - usa direto
+    }
+
+    expandMindMap(mapData);
+}
+
+// Tornar as funções globais para serem acessíveis via onclick no HTML
+window.deleteSummary = deleteSummary;
+window.deleteMindMap = deleteMindMap;
+window.expandMindMap = expandMindMap;
+window.expandMindMapByCardId = expandMindMapByCardId;
+window.closeMindmapExpanded = closeMindmapExpanded;
+
+// Event listener para fechar modal de expansão com ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('mindmap-expanded-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+            closeMindmapExpanded();
+        }
+    }
+});
+
+// Event listener para fechar modal ao clicar fora dele
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('mindmap-expanded-modal');
+    if (modal && e.target === modal) {
+        closeMindmapExpanded();
+    }
+});
 
 
 // =================================================================================
@@ -546,12 +1011,6 @@ if (darkModeToggleBtn) {
 }
 // FIM DA ADIÇÃO
 
-if (viewSummariesBtn) {
-    viewSummariesBtn.addEventListener('click', () => {
-        renderSummariesList();
-        summariesModal.classList.remove('hidden');
-    });
-}
 if (summariesModalCloseBtn) {
     summariesModalCloseBtn.addEventListener('click', () => {
         summariesModal.classList.add('hidden');
@@ -577,10 +1036,13 @@ if (mindMapBtn) {
                             mapData: mindMapData
                         });
                         await saveChanges();
+                        updateAiBadges(); // Atualizar badges após salvar
+                        updateAiPanelContent(); // Atualizar painel de artefatos
                     }
 
                     hideModal();
-                    mindMapContainer.innerHTML = markdownListToHtml(mindMapData);
+                    // Renderiza com Markmap interativo em vez de HTML simples
+                    renderMarkmap(mindMapData, mindMapContainer);
                     mindMapModal.classList.remove('hidden');
                 })
                 .catch((error) => {
@@ -597,6 +1059,40 @@ if (mindMapModalCloseBtn) {
         mindMapModal.classList.add('hidden');
     });
 }
+
+// =================================================================================
+// EVENT LISTENERS DO PAINEL DE ARTEFATOS IA
+// =================================================================================
+
+// Botão flutuante para abrir o painel
+if (toggleAiPanelBtn) {
+    toggleAiPanelBtn.addEventListener('click', () => {
+        toggleAiPanel();
+    });
+}
+
+// Botão X para fechar o painel
+if (closeAiPanelBtn) {
+    closeAiPanelBtn.addEventListener('click', () => {
+        closeAiPanel();
+    });
+}
+
+// Aba de Resumos
+if (tabSummaries) {
+    tabSummaries.addEventListener('click', () => {
+        switchAiTab('summaries');
+    });
+}
+
+// Aba de Mapas Mentais
+if (tabMindmaps) {
+    tabMindmaps.addEventListener('click', () => {
+        switchAiTab('mindmaps');
+    });
+}
+
+// =================================================================================
 
 addSectionBtn.addEventListener('click', () => {
     showModal('Criar Nova Sessão', 'Qual será o nome da nova sessão?', {
@@ -917,6 +1413,8 @@ summarizeBtn.addEventListener('click', () => {
                     });
                     await saveChanges();
                     renderPageContent();
+                    updateAiBadges(); // Atualizar badges após salvar
+                    updateAiPanelContent(); // Atualizar painel de artefatos
                 }
                 hideModal();
                 showModal('Resumo Gerado pela IA', summary, { 

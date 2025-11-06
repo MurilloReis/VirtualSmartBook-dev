@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(firebase functions:config:get:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
