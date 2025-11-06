@@ -1063,3 +1063,34 @@ body.dark-mode #modal-message::-webkit-scrollbar-thumb {
 body.dark-mode #modal-message::-webkit-scrollbar-thumb:hover {
     background: #64748b;
 }
+/* ================================================================== */
+/* CORREÇÃO DARK MODE: Forçar texto preto a ficar claro
+/* ================================================================== */
+
+/* Esta regra "caça" qualquer elemento dentro do editor que tenha
+  um estilo inline definindo a cor como preta (rgb(0,0,0), #000, etc.)
+  e força a cor para cinza claro (#d1d5db) usando !important.
+*/
+.dark-mode #page-content [style*="color: rgb(0, 0, 0)"],
+.dark-mode #page-content [style*="color: #000000"],
+.dark-mode #page-content [style*="color: #000"],
+.dark-mode #page-content [style*="color: black"] {
+    color: #d1d5db !important;
+}
+
+/* Esta regra faz o mesmo para a tag <font>, que é
+  mais antiga mas ainda usada por alguns editores.
+*/
+.dark-mode #page-content font[color="#000000"],
+.dark-mode #page-content font[color="#000"],
+.dark-mode #page-content font[color="black"] {
+    color: #d1d5db !important;
+}
+
+/* Bônus: Garante que os navegadores não forcem 'negrito'
+  a ser preto por padrão no modo escuro.
+*/
+.dark-mode #page-content b,
+.dark-mode #page-content strong {
+    color: inherit;
+}
