@@ -36,38 +36,119 @@ exports.summarizeText = onCall({secrets: ["GEMINI_KEY"]}, (request) => {
   }
 });
 
+// Conversor JSON → Markdown ULTRA-ROBUSTO
+function jsonToMarkdown(data, level = 1) {
+  let result = "";
+  const hash = "#".repeat(Math.min(level, 6)); // Máximo 6 níveis
+
+  // String direta
+  if (typeof data === "string" && data.trim()) {
+    return `${hash} ${data.trim()}\n`;
+  }
+
+  // Array
+  if (Array.isArray(data)) {
+    data.forEach((item) => {
+      result += jsonToMarkdown(item, level);
+    });
+    return result;
+  }
+
+  // Objeto
+  if (typeof data === "object" && data !== null) {
+    // Detecta tópico principal (central, title, name, topic)
+    const mainTitle = data.central || data.title ||
+                      data.name || data.topic || data.heading;
+
+    if (mainTitle) {
+      result += `${hash} ${String(mainTitle).trim()}\n`;
+    }
+
+    // Processa arrays de conteúdo (branches, children, items, subtopics)
+    const contentArrays = [
+      data.branches, data.children, data.items,
+      data.subtopics, data.topics, data.content,
+    ].filter((arr) => Array.isArray(arr));
+
+    contentArrays.forEach((arr) => {
+      arr.forEach((item) => {
+        result += jsonToMarkdown(item, level + 1);
+      });
+    });
+  }
+
+  return result;
+}
+
 // NOVA FUNÇÃO PARA GERAR MAPAS MENTAIS
 exports.generateMindMap = onCall({secrets: ["GEMINI_KEY"]}, (request) => {
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
+  const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
 
-    if (!request.auth) {
-        throw new Error("Você precisa estar autenticado para usar esta função.");
+  if (!request.auth) {
+    throw new Error("Você precisa estar autenticado para usar esta função.");
+  }
+
+  const text = request.data.text;
+  if (!text || typeof text !== "string" || text.trim().length === 0) {
+    throw new Error("O texto fornecido é inválido.");
+  }
+
+  try {
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+      generationConfig: {
+        responseMimeType: "application/json",
+      },
+    });
+
+    const prompt = `Analise o texto e retorne um mapa mental em JSON:
+
+{
+  "central": "Tópico Principal",
+  "branches": [
+    {
+      "title": "Ramo 1",
+      "children": ["Detalhe A", "Detalhe B"]
+    },
+    {
+      "title": "Ramo 2",
+      "children": ["Detalhe C"]
     }
+  ]
+}
 
-    const text = request.data.text;
-    if (!text || typeof text !== "string" || text.trim().length === 0) {
-        throw new Error("O texto fornecido é inválido.");
-    }
+Regras: Máximo 4 níveis. Seja conciso.
 
-    try {
-        const model = genAI.getGenerativeModel({model: "gemini-2.5-flash"});
-        const prompt = `
-            Analise o seguinte texto e gere uma estrutura de mapa mental em formato de lista hierárquica (markdown).
-            - O primeiro item deve ser o tópico central.
-            - Itens com um recuo (um traço) devem ser os ramos principais.
-            - Itens com mais recuo (dois traços) devem ser os sub-ramos.
-            - Seja conciso e foque nos conceitos e palavras-chave.
+Texto: "${text}"`;
 
-            Texto: "${text}"
-        `;
+    return model.generateContent(prompt).then((result) => {
+      const response = result.response;
+      let content = response.text().trim();
 
-        return model.generateContent(prompt).then((result) => {
-            const response = result.response;
-            const mindMapData = response.text();
-            return { mindMapData: mindMapData };
-        });
-    } catch (error) {
-        console.error("Erro na API do Gemini ao gerar mapa mental:", error);
-        throw new Error("Não foi possível gerar o mapa mental.");
-    }
+      console.log("JSON do Gemini:", content);
+
+      try {
+        // Parse o JSON
+        const jsonData = JSON.parse(content);
+        console.log("✅ JSON parseado:", JSON.stringify(jsonData, null, 2));
+
+        // Converte JSON para markdown
+        const markdown = jsonToMarkdown(jsonData);
+        console.log("✅ Markdown gerado:", markdown);
+
+        if (!markdown || markdown.trim().length === 0) {
+          throw new Error("Markdown vazio após conversão");
+        }
+
+        return {mindMapData: markdown.trim()};
+      } catch (parseError) {
+        console.error("❌ Erro ao processar:", parseError);
+        console.error("Conteúdo bruto:", content);
+        throw new Error("Falha ao converter mapa mental: " + parseError.message);
+      }
+    });
+  } catch (error) {
+    console.error("Erro na API do Gemini ao gerar mapa mental:", error);
+    throw new Error("Não foi possível gerar o mapa mental.");
+  }
 });

@@ -338,6 +338,7 @@ function render() {
     renderPagesList(pages);
     renderPageContent();
     toggleManagementButtons();
+    updateAiPanelContent(); // Atualizar painel de artefatos ao mudar de página/seção
 }
 
 function renderNotebookName(name) { activeNotebookNameEl.textContent = name; }
@@ -510,30 +511,106 @@ function renderSummariesList() {
     });
 }
 
-function markdownListToHtml(markdown) {
-    const lines = markdown.split('\n').filter(line => line.trim() !== '');
-    let html = '<ul>';
-    let level = 0;
+// Conversor JSON para Markdown (FALLBACK no frontend)
+function jsonToMarkdownFallback(data, level = 1) {
+    let result = '';
+    const hash = '#'.repeat(Math.min(level, 6));
 
-    lines.forEach(line => {
-        const trimmedLine = line.trim();
-        const currentLevel = (line.match(/^\s*/)[0].length) / 2;
-        const content = trimmedLine.replace(/^- \s*/, '');
+    if (typeof data === 'string' && data.trim()) {
+        return `${hash} ${data.trim()}\n`;
+    }
 
-        if (currentLevel > level) {
-            html += '<ul>'.repeat(currentLevel - level);
-        } else if (currentLevel < level) {
-            html += '</li></ul>'.repeat(level - currentLevel) + '</li>';
-        } else if (level > 0 && !html.endsWith('</li>')) {
-             html += '</li>';
+    if (Array.isArray(data)) {
+        data.forEach(item => result += jsonToMarkdownFallback(item, level));
+        return result;
+    }
+
+    if (typeof data === 'object' && data !== null) {
+        const title = data.central || data.title || data.name || data.topic;
+        if (title) result += `${hash} ${String(title).trim()}\n`;
+
+        const arrays = [data.branches, data.children, data.items, data.topics].filter(arr => Array.isArray(arr));
+        arrays.forEach(arr => arr.forEach(item => result += jsonToMarkdownFallback(item, level + 1)));
+    }
+
+    return result;
+}
+
+/**
+ * Renderiza um mapa mental interativo usando Markmap
+ * @param {string} markdown - Markdown formatado com cabeçalhos (#, ##, ###)
+ * @param {HTMLElement} container - Elemento onde o mapa será renderizado
+ */
+function renderMarkmap(markdown, container) {
+    if (!markdown || !container) {
+        console.error('Markdown ou container inválido para renderizar Markmap');
+        return;
+    }
+
+    try {
+        let markdownString = markdown;
+
+        // Se recebeu objeto JSON, converte para markdown
+        if (typeof markdown === 'object') {
+            console.warn('⚠️ Recebeu JSON em vez de markdown, convertendo...');
+            markdownString = jsonToMarkdownFallback(markdown);
+            console.log('✅ Markdown convertido no frontend:', markdownString);
         }
 
-        html += `<li>${content}`;
-        level = currentLevel;
-    });
+        markdownString = String(markdownString);
 
-    html += '</li></ul>'.repeat(level + 1);
-    return html.replace(/<\/li><\/ul><\/li>/g, '</li></ul>');
+        console.log('Renderizando Markmap com:', markdownString);
+
+        // Limpa o container
+        container.innerHTML = '';
+
+        // Garante que o container tenha dimensões
+        const containerRect = container.getBoundingClientRect();
+        const width = containerRect.width || 800;
+        const height = containerRect.height || 400;
+
+        console.log('Dimensões do container:', { width, height });
+
+        // Cria um SVG para o Markmap com dimensões explícitas
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', width);
+        svg.setAttribute('height', height);
+        svg.style.width = width + 'px';
+        svg.style.height = height + 'px';
+        container.appendChild(svg);
+
+        // Aguarda um frame para garantir que o SVG foi inserido no DOM
+        requestAnimationFrame(() => {
+            try {
+                // Usa a biblioteca Markmap global
+                const { Markmap } = window.markmap;
+                const { Transformer } = window.markmap;
+
+                // Transforma o markdown em dados para o Markmap
+                const transformer = new Transformer();
+                const { root } = transformer.transform(markdownString);
+
+                console.log('Root do mapa mental:', root);
+
+                // Renderiza o mapa mental
+                Markmap.create(svg, null, root);
+
+                console.log('Markmap renderizado com sucesso!');
+            } catch (innerError) {
+                console.error('Erro ao criar Markmap:', innerError);
+                container.innerHTML = `<div class="text-red-600 p-4">
+                    <p class="font-semibold mb-2">Erro ao renderizar mapa mental</p>
+                    <p class="text-sm">Detalhes: ${innerError.message}</p>
+                </div>`;
+            }
+        });
+    } catch (error) {
+        console.error('Erro ao renderizar Markmap:', error);
+        container.innerHTML = `<div class="text-red-600 p-4">
+            <p class="font-semibold mb-2">Erro ao renderizar mapa mental</p>
+            <p class="text-sm">Por favor, tente gerar novamente.</p>
+        </div>`;
+    }
 }
 
 
@@ -670,7 +747,10 @@ function updateAiPanelContent() {
                             <i class="fas fa-file-alt text-blue-600"></i>
                             <span class="font-semibold text-gray-800">Resumo #${sortedSummaries.length - index}</span>
                         </div>
-                        <div class="flex items-center gap-3">
+                        <div class="artifact-actions">
+                            <button class="artifact-action-btn delete" onclick="event.stopPropagation(); deleteSummary(${summary.createdAt})" title="Excluir resumo">
+                                <i class="fas fa-trash"></i>
+                            </button>
                             <span class="text-xs text-gray-500">${formattedDate}</span>
                             <i class="fas fa-chevron-down artifact-toggle-icon text-gray-400"></i>
                         </div>
@@ -690,7 +770,9 @@ function updateAiPanelContent() {
         aiMindmapsContent.innerHTML = '<p class="text-gray-500 text-center py-8">Nenhum mapa mental gerado ainda.</p>';
     } else {
         const sortedMindMaps = [...page.mindMaps].sort((a, b) => b.createdAt - a.createdAt);
-        let htmlMindMaps = '';
+
+        // Limpa o conteúdo
+        aiMindmapsContent.innerHTML = '';
 
         sortedMindMaps.forEach((mindMap, index) => {
             const formattedDate = new Date(mindMap.createdAt).toLocaleString('pt-BR', {
@@ -699,28 +781,39 @@ function updateAiPanelContent() {
             });
             const cardId = `mindmap-${mindMap.createdAt}`;
 
-            htmlMindMaps += `
-                <div class="artifact-card collapsed mb-3" data-card-id="${cardId}">
-                    <div class="artifact-header" onclick="toggleArtifactCard('${cardId}')">
-                        <div class="flex items-center gap-2">
-                            <i class="fas fa-sitemap text-purple-600"></i>
-                            <span class="font-semibold text-gray-800">Mapa Mental #${sortedMindMaps.length - index}</span>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <span class="text-xs text-gray-500">${formattedDate}</span>
-                            <i class="fas fa-chevron-down artifact-toggle-icon text-gray-400"></i>
+            // Cria o card simples (sem expansão)
+            const card = document.createElement('div');
+            card.className = 'artifact-card-simple mb-3';
+            card.dataset.cardId = cardId;
+
+            // Armazena os dados do mapa mental no card para acesso posterior
+            // Se mapData for objeto, converte para JSON string; se já for string, mantém
+            card.dataset.mapData = typeof mindMap.mapData === 'object'
+                ? JSON.stringify(mindMap.mapData)
+                : mindMap.mapData;
+
+            card.innerHTML = `
+                <div class="flex items-center justify-between p-3">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-sitemap text-purple-600 text-lg"></i>
+                        <div>
+                            <div class="font-semibold text-gray-800">Mapa Mental #${sortedMindMaps.length - index}</div>
+                            <div class="text-xs text-gray-500">${formattedDate}</div>
                         </div>
                     </div>
-                    <div class="artifact-content">
-                        <div class="text-sm text-gray-800 bg-white p-3 rounded border border-purple-200">
-                            ${markdownListToHtml(mindMap.mapData)}
-                        </div>
+                    <div class="artifact-actions">
+                        <button class="artifact-action-btn expand" onclick="expandMindMapByCardId('${cardId}')" title="Visualizar em tela cheia">
+                            <i class="fas fa-expand"></i>
+                        </button>
+                        <button class="artifact-action-btn delete" onclick="deleteMindMap(${mindMap.createdAt})" title="Excluir mapa mental">
+                            <i class="fas fa-trash"></i>
+                        </button>
                     </div>
                 </div>
             `;
-        });
 
-        aiMindmapsContent.innerHTML = htmlMindMaps;
+            aiMindmapsContent.appendChild(card);
+        });
     }
 }
 
@@ -738,6 +831,171 @@ function toggleArtifactCard(cardId) {
 
 // Tornar a função global para ser acessível via onclick no HTML
 window.toggleArtifactCard = toggleArtifactCard;
+
+/**
+ * Exclui um resumo da página atual
+ * @param {number} createdAt - Timestamp do resumo a ser excluído
+ */
+function deleteSummary(createdAt) {
+    if (!activePageId) return;
+
+    showModal(
+        'Confirmar Exclusão',
+        'Tem certeza que deseja excluir este resumo?',
+        {
+            showCancelButton: true,
+            confirmText: 'Excluir',
+            confirmCallback: async () => {
+                try {
+                    const page = userData.notebooks[activeNotebookId].sections[activeSectionId].pages[activePageId];
+
+                    // Remove o resumo do array
+                    page.summaries = page.summaries.filter(s => s.createdAt !== createdAt);
+
+                    await saveChanges();
+                    updateAiPanelContent();
+                    updateAiBadges();
+
+                    console.log('✅ Resumo excluído com sucesso');
+                    hideModal();
+                } catch (error) {
+                    console.error('❌ Erro ao excluir resumo:', error);
+                    showModal('Erro', 'Não foi possível excluir o resumo.', { showCancelButton: false, confirmText: 'Fechar' });
+                }
+            }
+        }
+    );
+}
+
+/**
+ * Exclui um mapa mental da página atual
+ * @param {number} createdAt - Timestamp do mapa mental a ser excluído
+ */
+function deleteMindMap(createdAt) {
+    if (!activePageId) return;
+
+    showModal(
+        'Confirmar Exclusão',
+        'Tem certeza que deseja excluir este mapa mental?',
+        {
+            showCancelButton: true,
+            confirmText: 'Excluir',
+            confirmCallback: async () => {
+                try {
+                    const page = userData.notebooks[activeNotebookId].sections[activeSectionId].pages[activePageId];
+
+                    // Remove o mapa mental do array
+                    page.mindMaps = page.mindMaps.filter(m => m.createdAt !== createdAt);
+
+                    await saveChanges();
+                    updateAiPanelContent();
+                    updateAiBadges();
+
+                    console.log('✅ Mapa mental excluído com sucesso');
+                    hideModal();
+                } catch (error) {
+                    console.error('❌ Erro ao excluir mapa mental:', error);
+                    showModal('Erro', 'Não foi possível excluir o mapa mental.', { showCancelButton: false, confirmText: 'Fechar' });
+                }
+            }
+        }
+    );
+}
+
+/**
+ * Expande um mapa mental em tela cheia
+ * @param {string} markdownData - Dados markdown do mapa mental
+ */
+function expandMindMap(markdownData) {
+    const modal = document.getElementById('mindmap-expanded-modal');
+    const container = document.getElementById('mindmap-expanded-content-inner');
+
+    if (!modal || !container) {
+        console.error('❌ Elementos do modal de expansão não encontrados');
+        return;
+    }
+
+    // Limpa o container
+    container.innerHTML = '';
+
+    // Exibe o modal
+    modal.classList.remove('hidden');
+
+    // Aguarda um pouco para garantir que o modal foi renderizado
+    setTimeout(() => {
+        renderMarkmap(markdownData, container);
+    }, 100);
+}
+
+/**
+ * Fecha o modal de expansão de mapa mental
+ */
+function closeMindmapExpanded() {
+    const modal = document.getElementById('mindmap-expanded-modal');
+    if (modal) {
+        modal.classList.add('hidden');
+
+        // Limpa o container após fechar
+        const container = document.getElementById('mindmap-expanded-content-inner');
+        if (container) {
+            container.innerHTML = '';
+        }
+    }
+}
+
+/**
+ * Expande um mapa mental a partir do ID do card
+ * @param {string} cardId - ID do card que contém o mapa mental
+ */
+function expandMindMapByCardId(cardId) {
+    const card = document.querySelector(`[data-card-id="${cardId}"]`);
+    if (!card) {
+        console.error('❌ Card não encontrado:', cardId);
+        return;
+    }
+
+    let mapData = card.dataset.mapData;
+    if (!mapData) {
+        console.error('❌ Dados do mapa mental não encontrados no card');
+        return;
+    }
+
+    // Se mapData for uma string JSON, faz o parse
+    try {
+        const parsed = JSON.parse(mapData);
+        // Se conseguiu fazer parse, é JSON - converte para markdown
+        mapData = jsonToMarkdownFallback(parsed);
+    } catch (e) {
+        // Se não conseguiu, já é uma string markdown - usa direto
+    }
+
+    expandMindMap(mapData);
+}
+
+// Tornar as funções globais para serem acessíveis via onclick no HTML
+window.deleteSummary = deleteSummary;
+window.deleteMindMap = deleteMindMap;
+window.expandMindMap = expandMindMap;
+window.expandMindMapByCardId = expandMindMapByCardId;
+window.closeMindmapExpanded = closeMindmapExpanded;
+
+// Event listener para fechar modal de expansão com ESC
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const modal = document.getElementById('mindmap-expanded-modal');
+        if (modal && !modal.classList.contains('hidden')) {
+            closeMindmapExpanded();
+        }
+    }
+});
+
+// Event listener para fechar modal ao clicar fora dele
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('mindmap-expanded-modal');
+    if (modal && e.target === modal) {
+        closeMindmapExpanded();
+    }
+});
 
 
 // =================================================================================
@@ -779,10 +1037,12 @@ if (mindMapBtn) {
                         });
                         await saveChanges();
                         updateAiBadges(); // Atualizar badges após salvar
+                        updateAiPanelContent(); // Atualizar painel de artefatos
                     }
 
                     hideModal();
-                    mindMapContainer.innerHTML = markdownListToHtml(mindMapData);
+                    // Renderiza com Markmap interativo em vez de HTML simples
+                    renderMarkmap(mindMapData, mindMapContainer);
                     mindMapModal.classList.remove('hidden');
                 })
                 .catch((error) => {
@@ -1154,6 +1414,7 @@ summarizeBtn.addEventListener('click', () => {
                     await saveChanges();
                     renderPageContent();
                     updateAiBadges(); // Atualizar badges após salvar
+                    updateAiPanelContent(); // Atualizar painel de artefatos
                 }
                 hideModal();
                 showModal('Resumo Gerado pela IA', summary, { 

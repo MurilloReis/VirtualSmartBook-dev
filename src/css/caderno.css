@@ -752,3 +752,314 @@ body.dark-mode .artifact-card .bg-white {
 body.dark-mode .artifact-card .border-purple-200 {
     border-color: #334155 !important;
 }
+
+/* ================================================================== */
+/* CARD SIMPLES (SEM EXPANSÃO) - PARA MAPAS MENTAIS                 */
+/* ================================================================== */
+
+.artifact-card-simple {
+    background-color: #ffffff;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+
+.artifact-card-simple:hover {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    border-color: #d1d5db;
+}
+
+/* Modo Noturno */
+body.dark-mode .artifact-card-simple {
+    background-color: #0f172a;
+    border-color: #334155;
+}
+
+body.dark-mode .artifact-card-simple:hover {
+    border-color: #475569;
+}
+
+body.dark-mode .artifact-card-simple .text-gray-800 {
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .artifact-card-simple .text-gray-500 {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .artifact-card-simple .text-purple-600 {
+    color: #a78bfa !important;
+}
+
+/* Estilo para containers de mapas mentais (Markmap) */
+.mindmap-container {
+    width: 100%;
+    overflow: hidden;
+}
+
+.mindmap-container svg {
+    width: 100%;
+    height: 100%;
+}
+
+/* Estilos específicos do modal de mapa mental */
+.mind-map-container {
+    width: 100%;
+    height: 500px;
+}
+
+/* Modo escuro para mapas mentais */
+body.dark-mode .mindmap-container {
+    background-color: #0f172a !important;
+}
+
+body.dark-mode .mind-map-container {
+    background-color: #0f172a;
+}
+
+
+/* ================================================================== */
+/* BOTÕES DE AÇÃO DOS ARTEFATOS (EXCLUIR, EXPANDIR)                 */
+/* ================================================================== */
+
+/* Container de botões de ação no header */
+.artifact-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Botões de ação individuais */
+.artifact-action-btn {
+    padding: 0.375rem 0.5rem;
+    background: none;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.artifact-action-btn:hover {
+    background-color: #e5e7eb;
+    color: #374151;
+}
+
+.artifact-action-btn:active {
+    transform: scale(0.95);
+}
+
+/* Botão de excluir (vermelho) */
+.artifact-action-btn.delete:hover {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+/* Botão de expandir (azul) */
+.artifact-action-btn.expand:hover {
+    background-color: #dbeafe;
+    color: #2563eb;
+}
+
+/* Modo escuro */
+body.dark-mode .artifact-action-btn {
+    color: #94a3b8;
+}
+
+body.dark-mode .artifact-action-btn:hover {
+    background-color: #334155;
+    color: #e2e8f0;
+}
+
+body.dark-mode .artifact-action-btn.delete:hover {
+    background-color: #7f1d1d;
+    color: #fca5a5;
+}
+
+body.dark-mode .artifact-action-btn.expand:hover {
+    background-color: #1e3a8a;
+    color: #93c5fd;
+}
+
+
+/* ================================================================== */
+/* MODAL DE EXPANSÃO DE MAPA MENTAL                                  */
+/* ================================================================== */
+
+.mindmap-expanded-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.85);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+    opacity: 1;
+    transition: opacity 0.3s ease;
+}
+
+.mindmap-expanded-modal.hidden {
+    display: none;
+    opacity: 0;
+}
+
+/* Container do mapa expandido */
+.mindmap-expanded-container {
+    width: 95vw;
+    height: 90vh;
+    background-color: #ffffff;
+    border-radius: 0.75rem;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Header do modal expandido */
+.mindmap-expanded-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.mindmap-expanded-header h3 {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #1f2937;
+    margin: 0;
+}
+
+.mindmap-expanded-close {
+    padding: 0.5rem;
+    background: none;
+    border: none;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    color: #6b7280;
+    font-size: 1.5rem;
+    line-height: 1;
+}
+
+.mindmap-expanded-close:hover {
+    background-color: #e5e7eb;
+    color: #374151;
+}
+
+/* Área de conteúdo do mapa expandido */
+.mindmap-expanded-content {
+    flex: 1;
+    padding: 1.5rem;
+    overflow: hidden;
+}
+
+.mindmap-expanded-content .mindmap-container {
+    width: 100%;
+    height: 100%;
+    background-color: #ffffff;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb;
+}
+
+/* Modo escuro - Modal expandido */
+body.dark-mode .mindmap-expanded-container {
+    background-color: #0f172a;
+}
+
+body.dark-mode .mindmap-expanded-header {
+    background-color: #1e293b;
+    border-bottom-color: #334155;
+}
+
+body.dark-mode .mindmap-expanded-header h3 {
+    color: #e2e8f0;
+}
+
+body.dark-mode .mindmap-expanded-close {
+    color: #94a3b8;
+}
+
+body.dark-mode .mindmap-expanded-close:hover {
+    background-color: #334155;
+    color: #e2e8f0;
+}
+
+body.dark-mode .mindmap-expanded-content .mindmap-container {
+    background-color: #0f172a;
+    border-color: #334155;
+}
+
+
+/* ================================================================== */
+/* MODAL DE CONFIRMAÇÃO - SCROLL PARA RESUMOS LONGOS                */
+/* ================================================================== */
+
+#confirmation-modal .bg-white {
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+#modal-message {
+    max-height: 60vh;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    text-align: left;
+    padding: 0.5rem;
+}
+
+/* Scrollbar personalizada para o modal */
+#modal-message::-webkit-scrollbar {
+    width: 8px;
+}
+
+#modal-message::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+}
+
+#modal-message::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+#modal-message::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Modo escuro - Modal de resumo */
+body.dark-mode #confirmation-modal .bg-white {
+    background-color: #1e293b !important;
+}
+
+body.dark-mode #modal-title {
+    color: #e2e8f0;
+}
+
+body.dark-mode #modal-message {
+    color: #e2e8f0;
+}
+
+body.dark-mode #modal-message::-webkit-scrollbar-track {
+    background: #0f172a;
+}
+
+body.dark-mode #modal-message::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+
+body.dark-mode #modal-message::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}

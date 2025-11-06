@@ -18,6 +18,11 @@
     <script src="https://unpkg.com/turndown/dist/turndown.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <!-- Markmap para visualização de mapas mentais -->
+    <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markmap-view@0.15.4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/markmap-lib@0.15.4/dist/browser/index.js"></script>
 </head>
 <body class="bg-gray-100 text-gray-800">
     <div class="flex flex-col h-screen">
@@ -233,7 +238,7 @@
             <input type="text" id="modal-input-text" class="modal-input-field hidden" placeholder="Ex: Artigo sobre Mitocôndrias">
 
             <label id="modal-label-url" for="modal-input" class="modal-label hidden">URL do Link:</label>
-            <input type="text" id="modal-input" class="modal-input-field hidden" placeholder="https://...">
+            <input type="text" id="modal-input" class="modal-input-field hidden" placeholder="Digite o nome">
             
             <div id="modal-buttons" class="flex justify-end space-x-4 w-full mt-4">
                 <button id="modal-cancel-btn" class="bg-gray-300 text-gray-800 py-2 px-4 rounded-md hover:bg-gray-400">Cancelar</button>
@@ -260,6 +265,25 @@
             <div id="mind-map-container" class="flex-grow overflow-auto p-4 mind-map-container"></div>
         </div>
     </div>
+
+    <!-- Modal de Expansão de Mapa Mental -->
+    <div id="mindmap-expanded-modal" class="mindmap-expanded-modal hidden">
+        <div class="mindmap-expanded-container">
+            <div class="mindmap-expanded-header">
+                <h3>
+                    <i class="fas fa-sitemap"></i>
+                    Mapa Mental
+                </h3>
+                <button class="mindmap-expanded-close" onclick="closeMindmapExpanded()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="mindmap-expanded-content">
+                <div id="mindmap-expanded-content-inner" class="mindmap-container"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="custom-context-menu" class="hidden absolute z-50 bg-white border border-gray-200 rounded-md shadow-lg py-1">
         <button id="summarize-btn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-file-alt mr-2"></i>Resumir Texto</button>
         <button id="mind-map-btn" class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"><i class="fas fa-sitemap mr-2"></i>Gerar Mapa Mental</button>
