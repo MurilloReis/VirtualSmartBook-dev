@@ -1063,6 +1063,25 @@ body.dark-mode #modal-message::-webkit-scrollbar-thumb {
 body.dark-mode #modal-message::-webkit-scrollbar-thumb:hover {
     background: #64748b;
 }
+/* --- CORREÇÃO DAS LISTAS (TAILWIND RESET) --- */
+.content-editable-area ul {
+    list-style-type: disc !important;
+    padding-left: 2rem !important;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.content-editable-area ol {
+    list-style-type: decimal !important;
+    padding-left: 2rem !important;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.content-editable-area li {
+    display: list-item !important;
+}
+
 /* ================================================================== */
 /* CORREÇÃO DARK MODE: Forçar texto preto a ficar claro
 /* ================================================================== */
