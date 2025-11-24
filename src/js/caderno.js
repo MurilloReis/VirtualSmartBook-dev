@@ -1296,76 +1296,35 @@ if (alignCenterBtn) alignCenterBtn.addEventListener('click', () => document.exec
 if (alignRightBtn) alignRightBtn.addEventListener('click', () => document.execCommand('justifyRight'));
 if (alignJustifyBtn) alignJustifyBtn.addEventListener('click', () => document.execCommand('justifyFull'));
 
-if (ulBtn) ulBtn.addEventListener('click', () => {
-        // restore selection saved on mousedown (if any)
-        const sel = window.getSelection();
-        if (lastEditorSelection) {
-            sel.removeAllRanges();
-            sel.addRange(lastEditorSelection);
-            lastEditorSelection = null;
-        }
-        pageContent.focus();
-        setTimeout(() => {
-            document.execCommand('insertUnorderedList');
-            setTimeout(() => {
-                const sel2 = window.getSelection();
-                if (!sel2.rangeCount) return;
-                let node = sel2.getRangeAt(0).commonAncestorContainer;
-                if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+// --- LÓGICA DE LISTAS (UL / OL) - VERSÃO "ANTI-ROUBO DE FOCO" ---
+    
+    // Função auxiliar que configura o botão corretamente
+    function setupListButton(btnElement, command) {
+        if (!btnElement) return;
 
-                // Se execCommand não criou <ul>, usa insertHTML como fallback
-                if (!node || (node && !node.closest('ul'))) {
-                    try {
-                        const range = sel2.getRangeAt(0).cloneRange();
-                        if (range.collapsed) {
-                            // Insere uma lista vazia
-                            document.execCommand('insertHTML', false, '<ul><li><br></li></ul>');
-                        } else {
-                            const fragment = range.cloneContents();
-                            const div = document.createElement('div');
-                            div.appendChild(fragment);
-                            const html = '<ul><li>' + div.innerHTML + '</li></ul>';
-                            document.execCommand('insertHTML', false, html);
-                        }
-                    } catch (e) { /* ignore */ }
-                }
-            }, 20);
-        }, 0);
-    });
+        // 1. O SEGREDO: Ao pressionar o botão (mousedown), impedimos o foco de sair do texto
+        btnElement.addEventListener('mousedown', (e) => {
+            e.preventDefault(); 
+        });
 
-    if (olBtn) olBtn.addEventListener('click', () => {
-        const sel = window.getSelection();
-        if (lastEditorSelection) {
-            sel.removeAllRanges();
-            sel.addRange(lastEditorSelection);
-            lastEditorSelection = null;
-        }
-        pageContent.focus();
-        setTimeout(() => {
-            document.execCommand('insertOrderedList');
-            setTimeout(() => {
-                const sel2 = window.getSelection();
-                if (!sel2.rangeCount) return;
-                let node = sel2.getRangeAt(0).commonAncestorContainer;
-                if (node.nodeType === Node.TEXT_NODE) node = node.parentNode;
+        // 2. No clique, apenas executamos o comando. 
+        // Como o foco nunca saiu do texto, o navegador sabe exatamente o que fazer.
+        btnElement.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Garante foco no editor por segurança
+            pageContent.focus(); 
+            document.execCommand(command, false, null);
+            
+            // Força a atualização visual dos botões
+            if (typeof updateToolbarState === 'function') {
+                updateToolbarState();
+            }
+        });
+    }
 
-                if (!node || (node && !node.closest('ol'))) {
-                    try {
-                        const range = sel2.getRangeAt(0).cloneRange();
-                        if (range.collapsed) {
-                            document.execCommand('insertHTML', false, '<ol><li><br></li></ol>');
-                        } else {
-                            const fragment = range.cloneContents();
-                            const div = document.createElement('div');
-                            div.appendChild(fragment);
-                            const html = '<ol><li>' + div.innerHTML + '</li></ol>';
-                            document.execCommand('insertHTML', false, html);
-                        }
-                    } catch (e) { /* ignore */ }
-                }
-            }, 20);
-        }, 0);
-    });
+    // Configura os botões usando as variáveis globais diretas
+    setupListButton(ulBtn, 'insertUnorderedList');
+    setupListButton(olBtn, 'insertOrderedList');
 
 if (removeFormatBtn) removeFormatBtn.addEventListener('click', () => document.execCommand('removeFormat'));
 
@@ -1548,21 +1507,19 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // --- 3. LÓGICA DO PINCEL DE FORMATAÇÃO (REVISADA E ESTÁVEL) ---
+    // --- 3. LÓGICA DO PINCEL DE FORMATAÇÃO (VERSÃO FINAL - VARREDURA DE ANCESTRAIS) ---
     let formatPainterActive = false;
-    let copiedStyles = null; // Guardará pares { 'css-property-name': 'value' }
+    let copiedStyles = null; 
 
-    // Lista em kebab-case — usaremos getPropertyValue e style.setProperty para maior compatibilidade
+    // Lista de estilos que queremos copiar
     const relevantStyles = [
-        'color', 'background-color', 'font-family', 'font-size', 'font-weight',
-        'font-style', 'text-decoration', 'text-decoration-color', 'vertical-align'
+        'color', 'font-family', 'font-size', 'font-weight', 'font-style', 
+        'vertical-align', 'text-transform'
     ];
-
-    const INLINE_TAGS = ['SPAN','A','B','I','EM','STRONG','U','S','MARK','FONT'];
 
     if (allToolbarButtons.formatPainterBtn) {
         allToolbarButtons.formatPainterBtn.addEventListener('click', () => {
-            // Se já ativo, desativa e limpa o estado
+            // Toggle de desativação
             if (formatPainterActive) {
                 formatPainterActive = false;
                 copiedStyles = null;
@@ -1573,155 +1530,151 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const selection = window.getSelection();
             if (!selection || !selection.rangeCount || selection.isCollapsed) {
-                showModal('Atenção', 'Para copiar a formatação, selecione primeiro o texto de origem e depois clique no pincel.', { showCancelButton: false, confirmText: 'OK' });
+                showModal('Atenção', 'Selecione o texto de origem para copiar a formatação.', { showCancelButton: false, confirmText: 'OK' });
                 return;
             }
 
-            // Encontra o elemento de origem mais apropriado (preferir inline)
-            let sourceElement = selection.getRangeAt(0).commonAncestorContainer;
-            if (sourceElement.nodeType === Node.TEXT_NODE) sourceElement = sourceElement.parentNode;
+            // Pega o nó onde a seleção começa
+            let currentNode = selection.getRangeAt(0).commonAncestorContainer;
+            if (currentNode.nodeType === Node.TEXT_NODE) currentNode = currentNode.parentNode;
 
-            // Sobe na árvore até encontrar um elemento inline ou até o container do editor
-            while (sourceElement && sourceElement !== pageContent && (
-                sourceElement.nodeType !== Node.ELEMENT_NODE ||
-                (window.getComputedStyle(sourceElement).display && window.getComputedStyle(sourceElement).display === 'block') ) ) {
-                sourceElement = sourceElement.parentNode;
-            }
-
-            if (!sourceElement || sourceElement === pageContent) {
-                // fallback: tenta usar o parent immediato da selection.anchorNode
-                const alt = selection.anchorNode && selection.anchorNode.parentNode;
-                if (alt && alt !== pageContent) sourceElement = alt;
-            }
-
-            if (!sourceElement || sourceElement === pageContent) {
-                showModal('Atenção', 'Não foi possível identificar um elemento de origem para copiar estilos.', { showCancelButton: false, confirmText: 'OK' });
-                return;
-            }
-
-            const computedStyle = window.getComputedStyle(sourceElement);
             copiedStyles = {};
+            
+            // Variáveis auxiliares para lógica cumulativa
+            let foundBg = false;
+            let foundDecoration = new Set(); // Para acumular underline, line-through, etc.
 
-            for (const prop of relevantStyles) {
-                try {
-                    const value = computedStyle.getPropertyValue(prop);
-                    if (value) copiedStyles[prop] = value.trim();
-                } catch (e) {
-                    // ignore propriedades que não existam
+            // LOOP DE VARREDURA (SOBE A ÁRVORE ATÉ O BLOCO)
+            // Isso garante que pegamos o fundo do pai, o itálico do filho, etc.
+            while (currentNode && currentNode !== pageContent) {
+                const computed = window.getComputedStyle(currentNode);
+                const display = computed.display;
+
+                // 1. CAPTURA DE ESTILOS BÁSICOS (Prioridade para o elemento mais interno/filho)
+                relevantStyles.forEach(prop => {
+                    if (!copiedStyles[prop] && computed.getPropertyValue(prop)) {
+                        copiedStyles[prop] = computed.getPropertyValue(prop);
+                    }
+                });
+
+                // 2. CAPTURA DE FUNDO (BACKGROUND) - O mais importante para o seu problema
+                // Procura o primeiro ancestral que NÃO seja transparente
+                if (!foundBg) {
+                    const bg = computed.backgroundColor;
+                    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+                        copiedStyles['background-color'] = bg;
+                        foundBg = true;
+                    }
                 }
+
+                // 3. CAPTURA DE DECORAÇÃO (SUBLINHADO/RISCADO)
+                // Acumula se encontrar tags específicas ou estilos computados
+                if (computed.textDecorationLine.includes('underline') || currentNode.tagName === 'U') foundDecoration.add('underline');
+                if (computed.textDecorationLine.includes('line-through') || currentNode.tagName === 'S' || currentNode.tagName === 'STRIKE' || currentNode.tagName === 'DEL') foundDecoration.add('line-through');
+
+                // 4. CAPTURA DE NEGRITO E ITÁLICO (GARANTIA EXTRA)
+                if (parseInt(computed.fontWeight) >= 600 || currentNode.tagName === 'B' || currentNode.tagName === 'STRONG') copiedStyles['font-weight'] = 'bold';
+                if (computed.fontStyle === 'italic' || currentNode.tagName === 'I' || currentNode.tagName === 'EM') copiedStyles['font-style'] = 'italic';
+
+                // Se chegou num elemento de bloco (P, DIV, H1...), para de subir para não pegar o fundo da página inteira
+                if (display === 'block' || ['P', 'DIV', 'H1', 'H2', 'H3', 'LI'].includes(currentNode.tagName)) {
+                    break;
+                }
+
+                currentNode = currentNode.parentNode;
             }
 
-            // Se nada foi copiado, aborta
+            // Consolida as decorações encontradas (ex: underline + line-through)
+            if (foundDecoration.size > 0) {
+                copiedStyles['text-decoration'] = Array.from(foundDecoration).join(' ');
+            }
+
+            // Verificação final
             if (!Object.keys(copiedStyles).length) {
-                showModal('Atenção', 'Nenhum estilo aplicável foi encontrado na seleção de origem.', { showCancelButton: false, confirmText: 'OK' });
-                copiedStyles = null;
                 return;
             }
 
+            // Ativa o modo pincel
             formatPainterActive = true;
             allToolbarButtons.formatPainterBtn.classList.add('btn-active');
-            pageContent.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="currentColor" d="M18.5,1.15a3.36,3.36,0,0,0-2.38.97L4.6,13.62a1.25,1.25,0,0,0-.35.84V17.5a1.25,1.25,0,0,0,1.25,1.25H8.54a1.25,1.25,0,0,0,.84-.35L20.88,6.88a3.36,3.36,0,0,0,0-4.76,3.36,3.36,0,0,0-2.38-.97ZM8.12,17H6.5V15.38L15.62,6.25l1.63,1.63Zm11-11L17.5,7.62,15.88,6,17.5,4.38a1.86,1.86,0,0,1,2.63,0,1.86,1.86,0,0,1,0,2.63Z"/></svg>'), auto`;
+            pageContent.style.cursor = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path fill="black" stroke="white" stroke-width="1" d="M18.5,1.15a3.36,3.36,0,0,0-2.38.97L4.6,13.62a1.25,1.25,0,0,0-.35.84V17.5a1.25,1.25,0,0,0,1.25,1.25H8.54a1.25,1.25,0,0,0,.84-.35L20.88,6.88a3.36,3.36,0,0,0,0-4.76,3.36,3.36,0,0,0-2.38-.97ZM8.12,17H6.5V15.38L15.62,6.25l1.63,1.63Zm11-11L17.5,7.62,15.88,6,17.5,4.38a1.86,1.86,0,0,1,2.63,0,1.86,1.86,0,0,1,0,2.63Z"/></svg>') 0 24, auto`;
         });
     }
 
     if (pageContent) {
         pageContent.addEventListener('mouseup', () => {
             const selection = window.getSelection();
-            if (!formatPainterActive || !copiedStyles || !selection || !selection.rangeCount || selection.isCollapsed) {
+            // Se pincel inativo, ou nada copiado, ou seleção vazia -> sai
+            if (!formatPainterActive || !copiedStyles || !selection || selection.isCollapsed) {
                 return;
             }
 
             try {
                 pageContent.focus();
                 const range = selection.getRangeAt(0);
-
-                // Extrai o conteúdo selecionado para um DocumentFragment
                 const extracted = range.extractContents();
 
-                // Função que aplica os estilos copiados a um elemento
+                // Função auxiliar para aplicar estilos em um elemento
                 const applyStyles = (el) => {
                     for (const prop in copiedStyles) {
                         try { el.style.setProperty(prop, copiedStyles[prop]); } catch (e) { /* ignore */ }
                     }
                 };
 
-                // Função recursiva que processa um nó do fragmento e retorna um nó estilizado
+                // Reconstrói o conteúdo aplicando o estilo
                 function processNode(node) {
+                    // Texto vira SPAN com estilo
                     if (node.nodeType === Node.TEXT_NODE) {
+                        if (node.textContent.trim() === '') return node.cloneNode(true); // Espaços vazios ignora
                         const span = document.createElement('span');
                         applyStyles(span);
                         span.textContent = node.textContent;
                         return span;
                     }
-
+                    
+                    // Elementos existentes
                     if (node.nodeType === Node.ELEMENT_NODE) {
-                        const nodename = node.nodeName;
+                        // Se for bloco, mantém estrutura e processa filhos
                         const display = window.getComputedStyle(node).display || '';
-
-                        // Mantemos elementos de bloco (p, div, headings, li, table) e processamos seus filhos
-                        if (display === 'block' || ['P','DIV','H1','H2','H3','H4','H5','H6','LI','TABLE'].includes(nodename)) {
-                            const newBlock = node.cloneNode(false);
-                            // preserva atributos importantes (id, class, etc.)
-                            for (const attr of Array.from(node.attributes || [])) {
-                                try { newBlock.setAttribute(attr.name, attr.value); } catch(e) { /* ignore */ }
-                            }
-                            // processa filhos mantendo estrutura de bloco
-                            for (const child of Array.from(node.childNodes)) {
-                                newBlock.appendChild(processNode(child));
-                            }
+                        if (display === 'block' || ['P','DIV','H1','H2','H3','LI'].includes(node.nodeName)) {
+                            const newBlock = node.cloneNode(false); // Clone raso
+                            // Copia atributos
+                            Array.from(node.attributes || []).forEach(attr => newBlock.setAttribute(attr.name, attr.value));
+                            // Processa filhos
+                            node.childNodes.forEach(child => newBlock.appendChild(processNode(child)));
                             return newBlock;
                         }
 
-                        // Para elementos inline: criamos um clone leve, aplicamos estilos e processamos filhos
-                        const newInline = node.cloneNode(false);
-                        // copia atributos exceto style para evitar sobrescrever
-                        for (const attr of Array.from(node.attributes || [])) {
-                            if (attr.name.toLowerCase() !== 'style') {
-                                try { newInline.setAttribute(attr.name, attr.value); } catch(e) { /* ignore */ }
-                            }
-                        }
-                        applyStyles(newInline);
-                        for (const child of Array.from(node.childNodes)) {
-                            newInline.appendChild(processNode(child));
-                        }
-                        return newInline;
+                        // Se for inline, cria novo SPAN wrapper para garantir limpeza de estilos conflitantes
+                        // ou aplica em cima. Vamos simplificar criando um span limpo com os estilos copiados
+                        const newSpan = document.createElement('span');
+                        applyStyles(newSpan);
+                        
+                        // Processa os filhos recursivamente
+                        node.childNodes.forEach(child => newSpan.appendChild(processNode(child)));
+                        return newSpan;
                     }
-
-                    // Para outros tipos de nós, retorna um clone simples
                     return node.cloneNode(true);
                 }
 
-                // Processa todo o fragmento extraído
                 const toInsert = document.createDocumentFragment();
-                for (const child of Array.from(extracted.childNodes)) {
+                nodeLoop: for (const child of Array.from(extracted.childNodes)) {
                     toInsert.appendChild(processNode(child));
                 }
 
-                // Insere de volta no documento
                 range.insertNode(toInsert);
-
-                // Reposiciona o cursor após o conteúdo inserido
-                const newRange = document.createRange();
-                // Tenta posicionar logo após o último nó inserido
-                const parent = range.startContainer;
-                let last = null;
-                if (toInsert.lastChild) last = toInsert.lastChild;
-                else if (range.startContainer && range.startContainer.childNodes[range.startOffset]) last = range.startContainer.childNodes[range.startOffset];
-
-                if (last) {
-                    try { newRange.setStartAfter(last); } catch(e) { newRange.selectNodeContents(pageContent); newRange.collapse(false); }
-                } else {
-                    newRange.selectNodeContents(pageContent);
-                    newRange.collapse();
-                }
-
-                newRange.collapse(true);
+                
+                // Seleciona o que acabou de ser colado (feedback visual)
                 selection.removeAllRanges();
+                const newRange = document.createRange();
+                newRange.selectNodeContents(toInsert.lastChild || toInsert); // Tenta focar no fim
+                newRange.collapse(false);
                 selection.addRange(newRange);
 
             } catch (e) {
-                console.error('Erro ao aplicar formatação com o pincel:', e);
+                console.error('Erro Format Painter:', e);
             } finally {
+                // Desliga tudo
                 formatPainterActive = false;
                 copiedStyles = null;
                 if (allToolbarButtons.formatPainterBtn) allToolbarButtons.formatPainterBtn.classList.remove('btn-active');
@@ -1729,7 +1682,6 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-
 
     // --- 4. NOVOS LISTENERS DE FORMATAÇÃO ---
     if(allToolbarButtons.undoBtn) allToolbarButtons.undoBtn.addEventListener('click', () => document.execCommand('undo'));
@@ -1832,4 +1784,4 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 // =================================================================================
 // FIM: NOVAS FUNCIONALIDADES DO EDITOR DE TEXTO
-// =================================================================================
+// =======================================================================================================================================================
