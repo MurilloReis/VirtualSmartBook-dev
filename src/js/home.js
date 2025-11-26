@@ -108,11 +108,24 @@ function toggleDarkMode() {
 onAuthStateChanged(auth, (user) => {
     if (user) {
         currentUserId = user.uid;
-        const displayName = user.displayName || user.email.split('@')[0]; 
-        
-        document.getElementById('welcome-user-name').textContent = displayName; 
+        const displayName = user.displayName || user.email.split('@')[0];
+        const photoURL = user.photoURL;
+        const userProfileIconContainer = document.getElementById('user-profile-icon-container');
+
+        document.getElementById('welcome-user-name').textContent = displayName;
         if (userDisplayName) {
-             userDisplayName.textContent = displayName;
+            userDisplayName.textContent = displayName;
+        }
+
+        if (photoURL && userProfileIconContainer) {
+            const profileImg = document.createElement('img');
+            profileImg.src = photoURL;
+            profileImg.alt = 'Foto de Perfil';
+            profileImg.className = 'h-full w-full object-cover'; // Garante que a imagem preencha o container
+            
+            // Limpa o container e adiciona a imagem
+            userProfileIconContainer.innerHTML = '';
+            userProfileIconContainer.appendChild(profileImg);
         }
 
         loadUserData(); 
